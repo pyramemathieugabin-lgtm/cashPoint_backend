@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"No tests configured\"",
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "start": "npx prisma generate && node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

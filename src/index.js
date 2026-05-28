@@ -16,13 +16,13 @@ const prisma = new PrismaClient({
 
 // Graceful shutdown (IMPORTANT Railway)
 process.on("SIGINT", async () => {
-  console.log("🛑 SIGINT received. Disconnecting Prisma...");
+  console.log("SIGINT received. Disconnecting Prisma...");
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-  console.log("🛑 SIGTERM received. Disconnecting Prisma...");
+  console.log("SIGTERM received. Disconnecting Prisma...");
   await prisma.$disconnect();
   process.exit(0);
 });
@@ -30,7 +30,7 @@ process.on("SIGTERM", async () => {
 // =====================
 // STARTUP DEBUG
 // =====================
-console.log("🚀 SERVER STARTING...");
+console.log("SERVER STARTING...");
 console.log("PORT:", process.env.PORT);
 console.log(
   "DATABASE_URL:",
@@ -107,7 +107,7 @@ try {
 // =====================
 app.get("/", (req, res) => {
   res.json({
-    message: "API is running 🚀",
+    message: "API is running",
   });
 });
 
@@ -117,5 +117,5 @@ app.get("/", (req, res) => {
 const port = process.env.PORT || 5000;
 
 app.listen(port, "0.0.0.0", () => {
-  console.log(`✅ API running on port ${port}`);
+  console.log(`API running on port ${port}`);
 });

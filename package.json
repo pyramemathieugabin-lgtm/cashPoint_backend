@@ -8,8 +8,10 @@
       "start": "node src/index.js",
       "prisma:generate": "prisma generate",
       "prisma:push": "prisma db push",
-      "postinstall": "npx prisma generate"
+      "build": "prisma generate && node src/index.js",
+      "postinstall": "prisma generate"
     },
+
     "keywords": [],
     "author": "",
     "license": "ISC",

@@ -11,8 +11,10 @@ const app = express();
 // PRISMA INIT (SAFE)
 // =====================
 const prisma = new PrismaClient({
+  datasources: { db: { url: process.env.DATABASE_URL } },
   log: ["error", "warn"],
 });
+
 
 // Graceful shutdown (IMPORTANT Railway)
 process.on("SIGINT", async () => {

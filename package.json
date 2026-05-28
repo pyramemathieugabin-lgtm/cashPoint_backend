@@ -7,12 +7,13 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "build": "npx prisma generate",
+    "build": "npm ci --omit=dev && npx prisma generate",
     "prisma:generate": "npx prisma generate",
     "prisma:push": "npx prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
+    "prisma": "^6.19.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -20,7 +21,6 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
-    "prisma": "^6.19.0"
+    "nodemon": "^3.1.14"
   }
 }

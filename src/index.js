@@ -24,10 +24,17 @@ console.log("DATABASE_URL:", process.env.DATABASE_URL ? "SET ✅" : "NOT SET ❌
 // =====================
 // CORS
 // =====================
-const allowedOrigins = (process.env.CORS_ORIGINS || "")
+const defaultOrigins = [
+  "https://cash-point-mada.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const allowedOrigins = [...defaultOrigins, ...(process.env.CORS_ORIGINS || "")
   .split(",")
   .map((x) => x.trim())
-  .filter(Boolean);
+  .filter(Boolean)]
+  .filter((origin, index, list) => list.indexOf(origin) === index);
 
 app.use(cors({
   origin(origin, callback) {
@@ -49,7 +56,7 @@ app.get("/api/health", async (_req, res) => {
     await prisma.$connect(); // test connexion réelle
     await prisma.$queryRaw`SELECT 1`;
 
-    return res.json({ status: "ok" });
+    return res.json({ status: "ok", database: "connected" });
   } catch (error) {
     console.error("❌ DB ERROR:", error);
 

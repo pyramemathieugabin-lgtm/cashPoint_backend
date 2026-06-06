@@ -28,6 +28,10 @@ const defaultOrigins = [
   "https://cash-point-mada.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
+  "capacitor://localhost",
+  "http://localhost",
+  "https://localhost",
+  "ionic://localhost",
 ];
 
 const allowedOrigins = [...defaultOrigins, ...(process.env.CORS_ORIGINS || "")

@@ -14,7 +14,7 @@ router.get("/", auth, async (req, res) => {
 
 router.post("/upsert", auth, async (req, res) => {
   try {
-    const { operator, operationType, minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
+    const { id, operator, operationType, minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
     const feeOperator = Number(operatorFee || 0);
     const feePersonal = Number(personalFee || 0);
     const gain = Number(gainCumule || 0);
@@ -29,6 +29,7 @@ router.post("/upsert", auth, async (req, res) => {
         },
       },
       create: {
+        ...(id ? { id } : {}),
         userId: req.user.id,
         operator,
         operationType,

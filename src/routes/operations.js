@@ -50,7 +50,9 @@ router.post("/", auth, async (req, res) => {
 
 router.patch("/:id/reference", auth, async (req, res) => {
   try {
-    const operation = await prisma.operation.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+    const operation = await prisma.operation.findFirst({
+      where: { userId: req.user.id, OR: [{ id: req.params.id }, { externalId: req.params.id }] },
+    });
     if (!operation) return res.status(404).json({ message: "Operation introuvable." });
     if (operation.kind !== "TRANSACTION") return res.status(400).json({ message: "Seules les references des transactions sont modifiables." });
     if ((operation.referenceEditCount ?? 0) >= 2) return res.status(400).json({ message: "Reference modifiable seulement deux fois." });
@@ -106,7 +108,7 @@ router.get("/history", auth, async (req, res) => {
 router.post("/:id/cancel", auth, async (req, res) => {
   try {
     const operation = await prisma.operation.findFirst({
-      where: { id: req.params.id, userId: req.user.id },
+      where: { userId: req.user.id, OR: [{ id: req.params.id }, { externalId: req.params.id }] },
     });
     if (!operation) return res.status(404).json({ message: "Operation introuvable." });
     if (operation.kind !== "TRANSACTION") return res.status(400).json({ message: "Seules les transactions client sont annulables." });

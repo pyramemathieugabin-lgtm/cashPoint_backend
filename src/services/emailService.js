@@ -34,6 +34,10 @@ const sendVerificationCode = async ({ to, name, code }) => {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: config.auth,
   });
 

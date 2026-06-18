@@ -34,27 +34,40 @@ const resolveIpv4Host = async (host) => {
   return addresses[0];
 };
 
+const createTransporter = ({ host, originalHost, port, secure, auth }) =>
+  nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    tls: {
+      servername: originalHost,
+    },
+    auth,
+  });
+
+const isNetworkSmtpError = (error) =>
+  ["ETIMEDOUT", "ESOCKET", "ECONNECTION", "ENETUNREACH", "ECONNREFUSED"].includes(error?.code) ||
+  /timeout|ENETUNREACH|ECONNREFUSED/i.test(error?.message || "");
+
 const sendVerificationCode = async ({ to, name, code }) => {
   const config = getSmtpConfig();
   const safeName = escapeHtml(name);
   const smtpHost = String(process.env.SMTP_FORCE_IPV4 || "true").toLowerCase() === "false"
     ? config.host
     : await resolveIpv4Host(config.host);
-  const transporter = nodemailer.createTransport({
+  let transporter = createTransporter({
     host: smtpHost,
+    originalHost: config.host,
     port: config.port,
     secure: config.secure,
-    family: 4,
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-    tls: {
-      servername: config.host,
-    },
     auth: config.auth,
   });
 
-  await transporter.sendMail({
+  const mailOptions = {
     from: config.from,
     to,
     subject: "Code de confirmation CashPoint Mada",
@@ -69,7 +82,21 @@ const sendVerificationCode = async ({ to, name, code }) => {
         <p>Si vous n'avez pas demande ce code, ignorez cet email.</p>
       </div>
     `,
-  });
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    if (config.port === 465 || !isNetworkSmtpError(error)) throw error;
+    transporter = createTransporter({
+      host: smtpHost,
+      originalHost: config.host,
+      port: 465,
+      secure: true,
+      auth: config.auth,
+    });
+    await transporter.sendMail(mailOptions);
+  }
 };
 
 module.exports = { sendVerificationCode };

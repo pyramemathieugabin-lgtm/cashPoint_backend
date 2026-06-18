@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns").promises;
 
 const getSmtpConfig = () => {
   const host = process.env.SMTP_HOST;
@@ -27,17 +28,29 @@ const escapeHtml = (value) => String(value || "")
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#39;");
 
+const resolveIpv4Host = async (host) => {
+  const addresses = await dns.resolve4(host);
+  if (!addresses.length) throw new Error(`Aucune adresse IPv4 trouvee pour ${host}.`);
+  return addresses[0];
+};
+
 const sendVerificationCode = async ({ to, name, code }) => {
   const config = getSmtpConfig();
   const safeName = escapeHtml(name);
+  const smtpHost = String(process.env.SMTP_FORCE_IPV4 || "true").toLowerCase() === "false"
+    ? config.host
+    : await resolveIpv4Host(config.host);
   const transporter = nodemailer.createTransport({
-    host: config.host,
+    host: smtpHost,
     port: config.port,
     secure: config.secure,
     family: 4,
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
+    tls: {
+      servername: config.host,
+    },
     auth: config.auth,
   });
 

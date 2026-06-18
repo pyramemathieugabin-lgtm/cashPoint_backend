@@ -1,11 +1,11 @@
 const express = require("express");
 const { prisma } = require("../config/db");
-const { auth } = require("../middleware/auth");
+const { auth, userOnly } = require("../middleware/auth");
 const { createOperationAndUpdateCash, calculateOperationValues } = require("../services/cashService");
 
 const router = express.Router();
 
-router.post("/preview", auth, async (req, res) => {
+router.post("/preview", auth, userOnly, async (req, res) => {
   try {
     const box = await prisma.cashBox.findUnique({ where: { userId: req.user.id } });
     if (!box?.dayStarted) return res.status(403).json({ message: "Commencez la journee avant toute operation client." });
@@ -24,7 +24,7 @@ router.post("/preview", auth, async (req, res) => {
   }
 });
 
-router.post("/", auth, async (req, res) => {
+router.post("/", auth, userOnly, async (req, res) => {
   try {
     const box = await prisma.cashBox.findUnique({ where: { userId: req.user.id } });
     if (!box?.dayStarted) return res.status(403).json({ message: "Commencez la journee avant toute operation client." });
@@ -49,7 +49,7 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-router.patch("/:id/reference", auth, async (req, res) => {
+router.patch("/:id/reference", auth, userOnly, async (req, res) => {
   try {
     const operation = await prisma.operation.findFirst({
       where: { userId: req.user.id, OR: [{ id: req.params.id }, { externalId: req.params.id }] },
@@ -72,7 +72,7 @@ router.patch("/:id/reference", auth, async (req, res) => {
   }
 });
 
-router.get("/history", auth, async (req, res) => {
+router.get("/history", auth, userOnly, async (req, res) => {
   const period = req.query.period || "daily";
   let where = { userId: req.user.id };
 
@@ -106,7 +106,7 @@ router.get("/history", auth, async (req, res) => {
   );
 });
 
-router.post("/:id/cancel", auth, async (req, res) => {
+router.post("/:id/cancel", auth, userOnly, async (req, res) => {
   try {
     const operation = await prisma.operation.findFirst({
       where: { userId: req.user.id, OR: [{ id: req.params.id }, { externalId: req.params.id }] },

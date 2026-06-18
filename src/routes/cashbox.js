@@ -1,11 +1,11 @@
 const express = require("express");
 const { prisma } = require("../config/db");
-const { auth } = require("../middleware/auth");
+const { auth, userOnly } = require("../middleware/auth");
 const { ensureCashBox, ensureOperatorBalances, replenishOperatorBalance } = require("../services/cashService");
 
 const router = express.Router();
 
-router.get("/", auth, async (req, res) => {
+router.get("/", auth, userOnly, async (req, res) => {
   const box = await ensureCashBox(req.user.id);
   const balances = await ensureOperatorBalances(req.user.id);
   res.json({
@@ -16,7 +16,7 @@ router.get("/", auth, async (req, res) => {
   });
 });
 
-router.post("/initialize", auth, async (req, res) => {
+router.post("/initialize", auth, userOnly, async (req, res) => {
   const rows = Array.isArray(req.body?.operators) ? req.body.operators : [];
   const data = await Promise.all(
     rows.map((row) =>
@@ -35,7 +35,7 @@ router.post("/initialize", auth, async (req, res) => {
   res.json({ operators: data });
 });
 
-router.post("/day/start", auth, async (req, res) => {
+router.post("/day/start", auth, userOnly, async (req, res) => {
   try {
     const rows = Array.isArray(req.body?.operators) ? req.body.operators : [];
     if (rows.length !== 3) return res.status(400).json({ message: "Veuillez renseigner les 3 operateurs." });
@@ -108,7 +108,7 @@ router.post("/day/start", auth, async (req, res) => {
   }
 });
 
-router.post("/day/close", auth, async (req, res) => {
+router.post("/day/close", auth, userOnly, async (req, res) => {
   try {
     const operationDate = req.body.offlineCreatedAt ? new Date(req.body.offlineCreatedAt) : new Date();
     const current = await ensureCashBox(req.user.id);
@@ -150,7 +150,7 @@ router.post("/day/close", auth, async (req, res) => {
   }
 });
 
-router.post("/replenish", auth, async (req, res) => {
+router.post("/replenish", auth, userOnly, async (req, res) => {
   try {
     const result = await replenishOperatorBalance({
       userId: req.user.id,
@@ -165,7 +165,7 @@ router.post("/replenish", auth, async (req, res) => {
   }
 });
 
-router.get("/journals", auth, async (req, res) => {
+router.get("/journals", auth, userOnly, async (req, res) => {
   try {
     // Find opening operations (one per operator per day)
     const openings = await prisma.operation.findMany({ where: { userId: req.user.id, kind: "OPENING" }, orderBy: { createdAt: "desc" } });
@@ -271,7 +271,7 @@ router.get("/journals", auth, async (req, res) => {
   }
 });
 
-router.get("/journals/day/:date", auth, async (req, res) => {
+router.get("/journals/day/:date", auth, userOnly, async (req, res) => {
   try {
     const dateValue = req.params.date;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {

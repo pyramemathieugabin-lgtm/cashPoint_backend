@@ -1,11 +1,11 @@
 const express = require("express");
 const { prisma } = require("../config/db");
-const { auth } = require("../middleware/auth");
+const { auth, userOnly } = require("../middleware/auth");
 const { ensureOperatorBalances, createOperationAndUpdateCash } = require("../services/cashService");
 
 const router = express.Router();
 
-router.get("/", auth, async (req, res) => {
+router.get("/", auth, userOnly, async (req, res) => {
   const balances = await ensureOperatorBalances(req.user.id);
 
   const startOfDay = new Date();
@@ -49,7 +49,7 @@ router.get("/", auth, async (req, res) => {
   });
 });
 
-router.post("/sync", auth, async (req, res) => {
+router.post("/sync", auth, userOnly, async (req, res) => {
   const operations = Array.isArray(req.body?.operations) ? req.body.operations : [];
   const result = { synced: 0, duplicated: 0, failed: 0 };
 

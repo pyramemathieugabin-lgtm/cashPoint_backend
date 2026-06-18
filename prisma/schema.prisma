@@ -33,12 +33,23 @@ model User {
   email                      String      @unique
   passwordHash               String
   role                       Role        @default(operator)
+  isValidated                Boolean     @default(false)
+  isBlocked                  Boolean     @default(false)
   cashBox                    CashBox?
   balances                   OperatorBalance[]
   operations                 Operation[]
   tariffs                    Tariff[]
   createdAt                  DateTime    @default(now())
   updatedAt                  DateTime    @updatedAt
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model CashBox {

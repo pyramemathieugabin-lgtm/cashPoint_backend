@@ -1,10 +1,10 @@
 const express = require("express");
 const { prisma } = require("../config/db");
-const { auth } = require("../middleware/auth");
+const { auth, userOnly } = require("../middleware/auth");
 
 const router = express.Router();
 
-router.get("/", auth, async (req, res) => {
+router.get("/", auth, userOnly, async (req, res) => {
   const data = await prisma.tariff.findMany({
     where: { OR: [{ userId: req.user.id }, { userId: null }] },
     orderBy: [{ operator: "asc" }, { operationType: "asc" }],
@@ -12,7 +12,7 @@ router.get("/", auth, async (req, res) => {
   res.json(data);
 });
 
-router.post("/upsert", auth, async (req, res) => {
+router.post("/upsert", auth, userOnly, async (req, res) => {
   try {
     const { id, operator, operationType, minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
     const feeOperator = Number(operatorFee || 0);
@@ -51,7 +51,7 @@ router.post("/upsert", auth, async (req, res) => {
   }
 });
 
-router.patch("/:id", auth, async (req, res) => {
+router.patch("/:id", auth, userOnly, async (req, res) => {
   try {
     const { minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
     const existing = await prisma.tariff.findFirst({ where: { id: req.params.id, userId: req.user.id } });
@@ -73,7 +73,7 @@ router.patch("/:id", auth, async (req, res) => {
   }
 });
 
-router.delete("/:id", auth, async (req, res) => {
+router.delete("/:id", auth, userOnly, async (req, res) => {
   try {
     const existing = await prisma.tariff.findFirst({ where: { id: req.params.id, userId: req.user.id } });
     if (!existing) return res.status(404).json({ message: "Tarif introuvable" });

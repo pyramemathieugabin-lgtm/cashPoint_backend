@@ -4,139 +4,90 @@ const crypto = require("crypto");
 const { prisma } = require("../config/db");
 const { auth } = require("../middleware/auth");
 const { ensureCashBox } = require("../services/cashService");
-const { sendVerificationCode } = require("../services/emailService");
 
 const router = express.Router();
 
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
-const hashVerificationCode = (email, code) => crypto.createHash("sha256").update(`${email}:${code}`).digest("hex");
-const generateVerificationCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-const buildVerificationData = (email) => {
-  const code = generateVerificationCode();
-  return {
-    code,
-    data: {
-      emailVerificationCodeHash: hashVerificationCode(email, code),
-      emailVerificationExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    },
-  };
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  isValidated: true,
+  isBlocked: true,
+  createdAt: true,
 };
 
-router.post("/signup", async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "Champs obligatoires manquants" });
+const signToken = (user) =>
+  jwt.sign({ id: user.id, role: user.role, email: user.email, name: user.name }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 
-    const lowerEmail = email.toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email: lowerEmail } });
-    if (existing?.emailVerified) return res.status(409).json({ message: "Email deja utilise" });
+const adminCount = () => prisma.user.count({ where: { role: "admin" } });
 
-    const verification = buildVerificationData(lowerEmail);
-    const user = existing
-      ? await prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          name,
-          passwordHash: hashPassword(password),
-          role: role === "admin" ? "admin" : "operator",
-          emailVerified: false,
-          emailVerifiedAt: null,
-          ...verification.data,
-        },
-      })
-      : await prisma.user.create({
-        data: {
-          name,
-          email: lowerEmail,
-          passwordHash: hashPassword(password),
-          role: role === "admin" ? "admin" : "operator",
-          ...verification.data,
-        },
-      });
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== "admin") return res.status(403).json({ message: "Acces reserve a l'administrateur." });
+  return next();
+};
 
-    await ensureCashBox(user.id);
-    await sendVerificationCode({ to: user.email, name: user.name, code: verification.code });
-
-    return res.status(201).json({ message: "Code de confirmation envoye par email", requiresVerification: true, email: user.email });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+const ensureNotLastAdminChange = async (targetId, nextRole, nextBlocked) => {
+  const target = await prisma.user.findUnique({ where: { id: targetId } });
+  if (!target) throw new Error("Utilisateur introuvable.");
+  const wouldLoseAdminAccess = target.role === "admin" && (nextRole === "operator" || nextBlocked === true);
+  if (wouldLoseAdminAccess && await adminCount() <= 1) {
+    throw new Error("Impossible de retirer ou bloquer le dernier administrateur.");
   }
+  return target;
+};
+
+router.get("/setup-status", async (_req, res) => {
+  const hasAdmin = await adminCount() > 0;
+  res.json({ hasAdmin });
 });
 
-router.post("/verify-email", async (req, res) => {
+router.post("/setup-admin", async (req, res) => {
   try {
-    const email = req.body.email?.toLowerCase() || "";
-    const code = String(req.body.code || "").trim();
-    if (!email || !/^\d{6}$/.test(code)) return res.status(400).json({ message: "Code de confirmation invalide" });
+    const hasAdmin = await adminCount() > 0;
+    if (hasAdmin) return res.status(403).json({ message: "Le compte administrateur existe deja." });
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(404).json({ message: "Compte introuvable" });
-    if (user.emailVerified) return res.json({ message: "Email deja confirme" });
-    if (!user.emailVerificationCodeHash || !user.emailVerificationExpiresAt) {
-      return res.status(400).json({ message: "Aucun code actif. Demandez un nouveau code." });
-    }
-    if (user.emailVerificationExpiresAt < new Date()) {
-      return res.status(400).json({ message: "Code expire. Demandez un nouveau code." });
-    }
-    if (hashVerificationCode(email, code) !== user.emailVerificationCodeHash) {
-      return res.status(400).json({ message: "Code de confirmation incorrect" });
-    }
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "Champs obligatoires manquants." });
 
-    await prisma.user.update({
-      where: { id: user.id },
+    const user = await prisma.user.create({
       data: {
-        emailVerified: true,
-        emailVerifiedAt: new Date(),
-        emailVerificationCodeHash: null,
-        emailVerificationExpiresAt: null,
+        name,
+        email: email.toLowerCase(),
+        passwordHash: hashPassword(password),
+        role: "admin",
+        isValidated: true,
+        isBlocked: false,
       },
     });
+    await ensureCashBox(user.id);
 
-    return res.json({ message: "Email confirme" });
+    res.status(201).json({ token: signToken(user), user: await prisma.user.findUnique({ where: { id: user.id }, select: publicUserSelect }) });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
-});
-
-router.post("/resend-verification", async (req, res) => {
-  try {
-    const email = req.body.email?.toLowerCase() || "";
-    if (!email) return res.status(400).json({ message: "Email obligatoire" });
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(404).json({ message: "Compte introuvable" });
-    if (user.emailVerified) return res.status(400).json({ message: "Email deja confirme" });
-
-    const verification = buildVerificationData(email);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: verification.data,
-    });
-    await sendVerificationCode({ to: user.email, name: user.name, code: verification.code });
-
-    return res.json({ message: "Nouveau code envoye" });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 });
 
 router.post("/login", async (req, res) => {
   try {
+    const hasAdmin = await adminCount() > 0;
+    if (!hasAdmin) return res.status(403).json({ message: "Creez d'abord le compte administrateur.", setupRequired: true });
+
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ where: { email: email?.toLowerCase() || "" } });
     if (!user) return res.status(401).json({ message: "Identifiants invalides" });
 
     const hash = hashPassword(password || "");
     if (hash !== user.passwordHash) return res.status(401).json({ message: "Identifiants invalides" });
-    if (!user.emailVerified) {
-      return res.status(403).json({ message: "Veuillez confirmer votre email avant de vous connecter.", requiresVerification: true, email: user.email });
+    if (user.isBlocked) return res.status(403).json({ message: "Compte bloque. Contactez l'administrateur." });
+    if (user.role !== "admin" && !user.isValidated) {
+      return res.status(403).json({ message: "Compte en attente de validation par l'administrateur." });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role, email: user.email, name: user.name }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
-
-    return res.json({ token });
+    return res.json({ token: signToken(user) });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -145,9 +96,76 @@ router.post("/login", async (req, res) => {
 router.get("/me", auth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, email: true, role: true, emailVerified: true },
+    select: publicUserSelect,
   });
   return res.json(user);
+});
+
+router.get("/users", auth, requireAdmin, async (_req, res) => {
+  const users = await prisma.user.findMany({
+    select: publicUserSelect,
+    orderBy: [{ role: "asc" }, { createdAt: "desc" }],
+  });
+  res.json(users);
+});
+
+router.post("/users", auth, requireAdmin, async (req, res) => {
+  try {
+    const { name, email, password, role, isValidated } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "Nom, email et mot de passe obligatoires." });
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        passwordHash: hashPassword(password),
+        role: role === "admin" ? "admin" : "operator",
+        isValidated: role === "admin" ? true : Boolean(isValidated),
+        isBlocked: false,
+      },
+      select: publicUserSelect,
+    });
+    await ensureCashBox(user.id);
+    res.status(201).json(user);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.patch("/users/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    const data = {};
+    if (req.body.name !== undefined) data.name = req.body.name;
+    if (req.body.email !== undefined) data.email = String(req.body.email).toLowerCase();
+    if (req.body.password) data.passwordHash = hashPassword(req.body.password);
+    if (req.body.role !== undefined) data.role = req.body.role === "admin" ? "admin" : "operator";
+    if (req.body.isValidated !== undefined) data.isValidated = Boolean(req.body.isValidated);
+    if (req.body.isBlocked !== undefined) data.isBlocked = Boolean(req.body.isBlocked);
+    if (data.role === "admin") data.isValidated = true;
+
+    await ensureNotLastAdminChange(req.params.id, data.role, data.isBlocked);
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data,
+      select: publicUserSelect,
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.delete("/users/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ message: "Utilisateur introuvable." });
+    if (target.role === "admin" && await adminCount() <= 1) {
+      return res.status(400).json({ message: "Impossible de supprimer le dernier administrateur." });
+    }
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 });
 
 module.exports = router;

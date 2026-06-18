@@ -33,10 +33,8 @@ model User {
   email                      String      @unique
   passwordHash               String
   role                       Role        @default(operator)
-  emailVerified              Boolean     @default(false)
-  emailVerifiedAt            DateTime?
-  emailVerificationCodeHash  String?
-  emailVerificationExpiresAt DateTime?
+  isValidated                Boolean     @default(false)
+  isBlocked                  Boolean     @default(false)
   cashBox                    CashBox?
   balances                   OperatorBalance[]
   operations                 Operation[]

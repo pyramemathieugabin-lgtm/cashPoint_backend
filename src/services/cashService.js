@@ -122,6 +122,7 @@ const createOperationAndUpdateCash = async ({
   customerPhone,
   customerName,
   includeWithdrawalFeeForTransfer,
+  createdAt,
 }) => {
   if (!OPERATION_TYPES.includes(operationType)) throw new Error("Type d'operation invalide.");
   if (!OPERATORS.includes(operator)) throw new Error("Operateur invalide.");
@@ -179,6 +180,7 @@ const createOperationAndUpdateCash = async ({
         initialMobileBalance: balance.mobileBalance,
         finalCashBalance: updatedBalance.cashBalance,
         finalMobileBalance: updatedBalance.mobileBalance,
+        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       },
     });
 
@@ -188,7 +190,7 @@ const createOperationAndUpdateCash = async ({
   return result;
 };
 
-const replenishOperatorBalance = async ({ userId, operator, cashAmount = 0, mobileAmount = 0 }) => {
+const replenishOperatorBalance = async ({ userId, operator, cashAmount = 0, mobileAmount = 0, createdAt }) => {
   if (!OPERATORS.includes(operator)) throw new Error("Operateur invalide.");
 
   return prisma.$transaction(async (tx) => {
@@ -222,6 +224,7 @@ const replenishOperatorBalance = async ({ userId, operator, cashAmount = 0, mobi
         clientFee: 0,
         gain: 0,
         totalFee,
+        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       },
     });
 

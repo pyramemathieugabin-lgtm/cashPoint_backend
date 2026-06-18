@@ -39,12 +39,13 @@ router.post("/day/start", auth, async (req, res) => {
   try {
     const rows = Array.isArray(req.body?.operators) ? req.body.operators : [];
     if (rows.length !== 3) return res.status(400).json({ message: "Veuillez renseigner les 3 operateurs." });
+    const operationDate = req.body.offlineCreatedAt ? new Date(req.body.offlineCreatedAt) : new Date();
 
     const current = await ensureCashBox(req.user.id);
     if (current.dayStarted) return res.status(400).json({ message: "La journee est deja en cours." });
-    const todayStart = new Date();
+    const todayStart = new Date(operationDate);
     todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
+    const todayEnd = new Date(operationDate);
     todayEnd.setHours(23, 59, 59, 999);
     const alreadyClosedToday = await prisma.operation.findFirst({
       where: {
@@ -78,7 +79,7 @@ router.post("/day/start", auth, async (req, res) => {
         prisma.operation.create({
           data: {
             userId: req.user.id,
-            reference: `OPEN-${new Date().toISOString().slice(0, 10)}-${row.operator}`,
+            reference: `OPEN-${operationDate.toISOString().slice(0, 10)}-${row.operator}`,
             kind: "OPENING",
             amount: Number(row.cashBalance || 0) + Number(row.mobileBalance || 0),
             operationType: "DEPOT",
@@ -90,6 +91,7 @@ router.post("/day/start", auth, async (req, res) => {
             totalFee: Number(row.cashBalance || 0) + Number(row.mobileBalance || 0),
             initialCashBalance: Number(row.cashBalance || 0),
             initialMobileBalance: Number(row.mobileBalance || 0),
+            createdAt: operationDate,
           },
         })
       )
@@ -97,7 +99,7 @@ router.post("/day/start", auth, async (req, res) => {
 
     const box = await prisma.cashBox.update({
       where: { id: current.id },
-      data: { dayStarted: true, dayOpenedAt: new Date(), dayClosedAt: null },
+      data: { dayStarted: true, dayOpenedAt: operationDate, dayClosedAt: null },
     });
 
     res.status(201).json({ operators: data, dayStarted: box.dayStarted, dayOpenedAt: box.dayOpenedAt });
@@ -108,6 +110,7 @@ router.post("/day/start", auth, async (req, res) => {
 
 router.post("/day/close", auth, async (req, res) => {
   try {
+    const operationDate = req.body.offlineCreatedAt ? new Date(req.body.offlineCreatedAt) : new Date();
     const current = await ensureCashBox(req.user.id);
     if (!current.dayStarted) return res.status(400).json({ message: "Aucune journee en cours." });
 
@@ -118,7 +121,7 @@ router.post("/day/close", auth, async (req, res) => {
         prisma.operation.create({
           data: {
             userId: req.user.id,
-            reference: `CLOSE-${new Date().toISOString().slice(0, 10)}-${b.operator}`,
+            reference: `CLOSE-${operationDate.toISOString().slice(0, 10)}-${b.operator}`,
             kind: "CLOSING",
             amount: Number(b.cashBalance || 0) + Number(b.mobileBalance || 0),
             operationType: "DEPOT",
@@ -130,6 +133,7 @@ router.post("/day/close", auth, async (req, res) => {
             totalFee: Number(b.cashBalance || 0) + Number(b.mobileBalance || 0),
             finalCashBalance: Number(b.cashBalance || 0),
             finalMobileBalance: Number(b.mobileBalance || 0),
+            createdAt: operationDate,
           },
         })
       )
@@ -137,7 +141,7 @@ router.post("/day/close", auth, async (req, res) => {
 
     const box = await prisma.cashBox.update({
       where: { id: current.id },
-      data: { dayStarted: false, dayClosedAt: new Date() },
+      data: { dayStarted: false, dayClosedAt: operationDate },
     });
 
     res.json({ dayStarted: box.dayStarted, dayClosedAt: box.dayClosedAt });
@@ -153,6 +157,7 @@ router.post("/replenish", auth, async (req, res) => {
       operator: req.body.operator,
       cashAmount: Number(req.body.cashAmount || 0),
       mobileAmount: Number(req.body.mobileAmount || 0),
+      createdAt: req.body.offlineCreatedAt,
     });
     res.status(201).json(result);
   } catch (error) {
@@ -244,6 +249,7 @@ router.get("/journals", auth, async (req, res) => {
         date: g.date,
         dateKey: g.date.toISOString().slice(0, 10),
         operators,
+        operations: ops,
         totalInitialMobile,
         totalFinalMobile,
         totalInitialCash,
@@ -251,6 +257,7 @@ router.get("/journals", auth, async (req, res) => {
         totalOps,
         totalGain,
         totalPersonalFee,
+        totalBonus: totalGain + totalPersonalFee,
         totalReapproAmount,
         totalReapproCashAmount,
         totalReapproMobileAmount,

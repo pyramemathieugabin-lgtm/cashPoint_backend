@@ -39,6 +39,7 @@ router.post("/", auth, async (req, res) => {
       customerPhone: req.body.customerPhone,
       customerName: req.body.customerName,
       includeWithdrawalFeeForTransfer: Boolean(req.body.includeWithdrawalFeeForTransfer),
+      createdAt: req.body.offlineCreatedAt,
     };
 
     const result = await createOperationAndUpdateCash(payload);
@@ -58,7 +59,7 @@ router.patch("/:id/reference", auth, async (req, res) => {
     if ((operation.referenceEditCount ?? 0) >= 2) return res.status(400).json({ message: "Reference modifiable seulement deux fois." });
 
     const updated = await prisma.operation.update({
-      where: { id: req.params.id },
+      where: { id: operation.id },
       data: {
         reference: req.body.reference || null,
         referenceEditCount: (operation.referenceEditCount || 0) + 1,

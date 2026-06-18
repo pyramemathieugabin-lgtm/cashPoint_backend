@@ -33,8 +33,6 @@ model User {
   email                      String      @unique
   passwordHash               String
   role                       Role        @default(operator)
-  isValidated                Boolean     @default(false)
-  isBlocked                  Boolean     @default(false)
   cashBox                    CashBox?
   balances                   OperatorBalance[]
   operations                 Operation[]

@@ -9,6 +9,7 @@ const router = express.Router();
 
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
+const normalizePhone = (phone) => String(phone || "").trim();
 
 const signToken = (account, accountType) =>
   jwt.sign(
@@ -27,6 +28,7 @@ const userSelect = {
   id: true,
   name: true,
   email: true,
+  phone: true,
   role: true,
   isValidated: true,
   isBlocked: true,
@@ -70,12 +72,16 @@ router.post("/signup", async (req, res) => {
     const hasAdmin = (await prisma.admin.count()) > 0;
     if (!hasAdmin) return res.status(403).json({ message: "Creez d'abord le compte administrateur.", setupRequired: true });
 
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "Champs obligatoires manquants" });
+    const { name, email, phone, password } = req.body;
+    if (!name || !email || !phone || !password) return res.status(400).json({ message: "Nom, email, telephone et mot de passe obligatoires" });
 
     const lowerEmail = normalizeEmail(email);
+    const cleanPhone = normalizePhone(phone);
     const existingUser = await prisma.user.findUnique({ where: { email: lowerEmail } });
     if (existingUser) return res.status(409).json({ message: "Email deja utilise" });
+
+    const existingPhone = await prisma.user.findUnique({ where: { phone: cleanPhone } });
+    if (existingPhone) return res.status(409).json({ message: "Numero telephone deja utilise" });
 
     const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
     if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
@@ -84,6 +90,7 @@ router.post("/signup", async (req, res) => {
       data: {
         name,
         email: lowerEmail,
+        phone: cleanPhone,
         passwordHash: hashPassword(password),
         role: "operator",
         isValidated: false,
@@ -154,6 +161,7 @@ router.get("/admin/dashboard", auth, adminOnly, async (req, res) => {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
       { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
     ];
   }
   if (status === "validated") where.isValidated = true;
@@ -186,6 +194,11 @@ router.patch("/admin/users/:id", auth, adminOnly, async (req, res) => {
       const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
       if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
       data.email = lowerEmail;
+    }
+    if (req.body.phone !== undefined) {
+      const cleanPhone = normalizePhone(req.body.phone);
+      if (!cleanPhone) return res.status(400).json({ message: "Numero telephone obligatoire." });
+      data.phone = cleanPhone;
     }
     if (req.body.password) data.passwordHash = hashPassword(req.body.password);
     if (req.body.isValidated !== undefined) data.isValidated = Boolean(req.body.isValidated);

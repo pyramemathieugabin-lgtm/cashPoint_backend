@@ -30,7 +30,7 @@ enum OperationType {
 model User {
   id                         String      @id @default(uuid())
   name                       String
-  email                      String      @unique
+  email                      String?     @unique
   phone                      String?     @unique
   passwordHash               String
   role                       Role        @default(operator)

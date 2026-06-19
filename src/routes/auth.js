@@ -10,6 +10,7 @@ const router = express.Router();
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 const normalizePhone = (phone) => String(phone || "").trim();
+const normalizeIdentifier = (value) => String(value || "").trim().toLowerCase();
 
 const signToken = (account, accountType) =>
   jwt.sign(
@@ -74,24 +75,26 @@ router.post("/signup", async (req, res) => {
     if (!hasAdmin) return res.status(403).json({ message: "Creez d'abord le compte administrateur.", setupRequired: true });
 
     const { name, email, phone, password, confirmPassword } = req.body;
-    if (!name || !email || !phone || !password || !confirmPassword) return res.status(400).json({ message: "Nom, email, telephone, mot de passe et confirmation obligatoires" });
+    if (!name || !phone || !password || !confirmPassword) return res.status(400).json({ message: "Nom, telephone, mot de passe et confirmation obligatoires" });
     if (password !== confirmPassword) return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
 
     const lowerEmail = normalizeEmail(email);
     const cleanPhone = normalizePhone(phone);
-    const existingUser = await prisma.user.findUnique({ where: { email: lowerEmail } });
-    if (existingUser) return res.status(409).json({ message: "Email deja utilise" });
+    if (lowerEmail) {
+      const existingUser = await prisma.user.findUnique({ where: { email: lowerEmail } });
+      if (existingUser) return res.status(409).json({ message: "Email deja utilise" });
+
+      const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
+      if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
+    }
 
     const existingPhone = await prisma.user.findUnique({ where: { phone: cleanPhone } });
     if (existingPhone) return res.status(409).json({ message: "Numero telephone deja utilise" });
 
-    const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
-    if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
-
     const user = await prisma.user.create({
       data: {
         name,
-        email: lowerEmail,
+        email: lowerEmail || null,
         phone: cleanPhone,
         passwordHash: hashPassword(password),
         role: "operator",
@@ -113,16 +116,25 @@ router.post("/login", async (req, res) => {
     const hasAdmin = (await prisma.admin.count()) > 0;
     if (!hasAdmin) return res.status(403).json({ message: "Creez d'abord le compte administrateur.", setupRequired: true });
 
-    const email = normalizeEmail(req.body.email);
+    const identifier = normalizeIdentifier(req.body.identifier || req.body.email || req.body.phone);
     const passwordHash = hashPassword(req.body.password || "");
 
-    const admin = await prisma.admin.findUnique({ where: { email } });
+    if (!identifier) return res.status(400).json({ message: "Email ou numero telephone obligatoire." });
+
+    const admin = await prisma.admin.findUnique({ where: { email: identifier } });
     if (admin) {
       if (passwordHash !== admin.passwordHash) return res.status(401).json({ message: "Identifiants invalides" });
       return res.json({ token: signToken(admin, "admin") });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          { phone: identifier },
+        ],
+      },
+    });
     if (!user) return res.status(401).json({ message: "Identifiants invalides" });
     if (passwordHash !== user.passwordHash) return res.status(401).json({ message: "Identifiants invalides" });
     if (user.isBlocked) return res.status(403).json({ message: "Compte bloque. Contactez l'administrateur." });
@@ -193,9 +205,11 @@ router.patch("/admin/users/:id", auth, adminOnly, async (req, res) => {
     if (req.body.name !== undefined) data.name = String(req.body.name).trim();
     if (req.body.email !== undefined) {
       const lowerEmail = normalizeEmail(req.body.email);
-      const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
-      if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
-      data.email = lowerEmail;
+      if (lowerEmail) {
+        const existingAdmin = await prisma.admin.findUnique({ where: { email: lowerEmail } });
+        if (existingAdmin) return res.status(409).json({ message: "Cet email est reserve a l'administrateur." });
+      }
+      data.email = lowerEmail || null;
     }
     if (req.body.phone !== undefined) {
       const cleanPhone = normalizePhone(req.body.phone);

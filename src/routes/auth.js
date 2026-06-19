@@ -46,8 +46,9 @@ router.post("/setup-admin", async (req, res) => {
     const hasAdmin = (await prisma.admin.count()) > 0;
     if (hasAdmin) return res.status(403).json({ message: "Le compte administrateur existe deja." });
 
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "Champs obligatoires manquants" });
+    const { name, email, password, confirmPassword } = req.body;
+    if (!name || !email || !password || !confirmPassword) return res.status(400).json({ message: "Champs obligatoires manquants" });
+    if (password !== confirmPassword) return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
 
     const lowerEmail = normalizeEmail(email);
     const existingUser = await prisma.user.findUnique({ where: { email: lowerEmail } });
@@ -72,8 +73,9 @@ router.post("/signup", async (req, res) => {
     const hasAdmin = (await prisma.admin.count()) > 0;
     if (!hasAdmin) return res.status(403).json({ message: "Creez d'abord le compte administrateur.", setupRequired: true });
 
-    const { name, email, phone, password } = req.body;
-    if (!name || !email || !phone || !password) return res.status(400).json({ message: "Nom, email, telephone et mot de passe obligatoires" });
+    const { name, email, phone, password, confirmPassword } = req.body;
+    if (!name || !email || !phone || !password || !confirmPassword) return res.status(400).json({ message: "Nom, email, telephone, mot de passe et confirmation obligatoires" });
+    if (password !== confirmPassword) return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
 
     const lowerEmail = normalizeEmail(email);
     const cleanPhone = normalizePhone(phone);
@@ -200,7 +202,11 @@ router.patch("/admin/users/:id", auth, adminOnly, async (req, res) => {
       if (!cleanPhone) return res.status(400).json({ message: "Numero telephone obligatoire." });
       data.phone = cleanPhone;
     }
-    if (req.body.password) data.passwordHash = hashPassword(req.body.password);
+    if (req.body.password || req.body.confirmPassword) {
+      if (!req.body.password || !req.body.confirmPassword) return res.status(400).json({ message: "Mot de passe et confirmation obligatoires." });
+      if (req.body.password !== req.body.confirmPassword) return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
+      data.passwordHash = hashPassword(req.body.password);
+    }
     if (req.body.isValidated !== undefined) data.isValidated = Boolean(req.body.isValidated);
     if (req.body.isBlocked !== undefined) data.isBlocked = Boolean(req.body.isBlocked);
     if (data.isBlocked) data.isValidated = false;

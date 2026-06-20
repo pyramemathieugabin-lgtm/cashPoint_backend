@@ -19,6 +19,8 @@ router.get("/", auth, userOnly, async (req, res) => {
               { operator: "YAS", operationType: "TRANSFERT" },
               { operator: "ORANGE", operationType: "RETRAIT" },
               { operator: "ORANGE", operationType: "TRANSFERT" },
+              { operator: "AIRTEL", operationType: "RETRAIT" },
+              { operator: "AIRTEL", operationType: "TRANSFERT" },
             ],
           },
         },

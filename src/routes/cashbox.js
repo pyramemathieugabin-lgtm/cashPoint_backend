@@ -114,6 +114,26 @@ router.post("/day/close", auth, userOnly, async (req, res) => {
     const current = await ensureCashBox(req.user.id);
     if (!current.dayStarted) return res.status(400).json({ message: "Aucune journee en cours." });
 
+    const dayStart = current.dayOpenedAt || new Date(operationDate.toISOString().slice(0, 10));
+    const missingReferences = await prisma.operation.count({
+      where: {
+        userId: req.user.id,
+        kind: "TRANSACTION",
+        operationType: { in: ["DEPOT", "TRANSFERT"] },
+        isCancelled: false,
+        createdAt: { gte: dayStart, lte: operationDate },
+        OR: [
+          { reference: null },
+          { reference: "" },
+        ],
+      },
+    });
+    if (missingReferences) {
+      return res.status(400).json({
+        message: `Completez les references obligatoires des depots et transferts avant de cloturer la journee. References manquantes: ${missingReferences}.`,
+      });
+    }
+
     // capture final balances per operator as CLOSING operations
     const balances = await ensureOperatorBalances(req.user.id);
     await Promise.all(

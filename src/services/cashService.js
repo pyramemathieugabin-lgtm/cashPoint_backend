@@ -3,6 +3,7 @@ const { isMvolaGuidedTariff } = require("../defaultTariffs");
 
 const OPERATION_TYPES = ["DEPOT", "RETRAIT", "TRANSFERT", "CREDIT"];
 const OPERATORS = ["YAS", "AIRTEL", "ORANGE"];
+const isFreeOperatorFeeOperation = (operationType) => ["DEPOT", "CREDIT"].includes(operationType);
 
 const ensureCashBox = async (userId) => {
   const existing = await prisma.cashBox.findUnique({ where: { userId } });
@@ -52,7 +53,7 @@ const calculateOperationValues = async ({ userId, operator, operationType, amoun
   const tariff = await findTariff({ userId, operator, operationType, amount });
   if (!tariff) throw new Error("Tarif introuvable pour cet operateur et type d'operation.");
 
-  let operatorFee = Number(tariff.operatorFee || 0);
+  let operatorFee = isFreeOperatorFeeOperation(operationType) ? 0 : Number(tariff.operatorFee || 0);
   let personalFee = Number(tariff.personalFee || 0);
   let gain = Number(tariff.gainCumule || 0);
 

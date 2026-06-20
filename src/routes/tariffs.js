@@ -4,6 +4,7 @@ const { auth, userOnly } = require("../middleware/auth");
 const { findMvolaGuidedOperatorFee, isMvolaGuidedTariff } = require("../defaultTariffs");
 
 const router = express.Router();
+const isFreeOperatorFeeOperation = (operationType) => ["DEPOT", "CREDIT"].includes(operationType);
 
 router.get("/", auth, userOnly, async (req, res) => {
   const data = await prisma.tariff.findMany({
@@ -23,7 +24,7 @@ router.get("/", auth, userOnly, async (req, res) => {
     },
     orderBy: [{ operator: "asc" }, { operationType: "asc" }],
   });
-  res.json(data);
+  res.json(data.map((tariff) => isFreeOperatorFeeOperation(tariff.operationType) ? { ...tariff, operatorFee: 0 } : tariff));
 });
 
 router.post("/upsert", auth, userOnly, async (req, res) => {
@@ -35,7 +36,7 @@ router.post("/upsert", auth, userOnly, async (req, res) => {
     if (isMvolaGuidedTariff(operator, operationType) && !mvolaGuidedFee) {
       return res.status(400).json({ message: "Tranche Mvola invalide. Utilisez une tranche du tableau officiel." });
     }
-    const feeOperator = mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee || 0);
+    const feeOperator = isFreeOperatorFeeOperation(operationType) ? 0 : (mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee || 0));
     const feePersonal = Number(personalFee || 0);
     const gain = Number(gainCumule || 0);
     const cleanMinAmount = mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount);
@@ -87,7 +88,7 @@ router.patch("/:id", auth, userOnly, async (req, res) => {
       data: {
         minAmount: mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount ?? existing.minAmount),
         maxAmount: mvolaGuidedFee ? mvolaGuidedFee.maxAmount : Number(maxAmount ?? existing.maxAmount),
-        operatorFee: mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0),
+        operatorFee: isFreeOperatorFeeOperation(existing.operationType) ? 0 : (mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0)),
         personalFee: Number(personalFee ?? existing.personalFee ?? 0),
         gainCumule: Number(gainCumule ?? existing.gainCumule ?? 0),
       },

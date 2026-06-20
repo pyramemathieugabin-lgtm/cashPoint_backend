@@ -1,7 +1,7 @@
 const express = require("express");
 const { prisma } = require("../config/db");
 const { auth, userOnly } = require("../middleware/auth");
-const { findMvolaWithdrawalOperatorFee, isMvolaWithdrawalTariff } = require("../defaultTariffs");
+const { findMvolaGuidedOperatorFee, isMvolaGuidedTariff } = require("../defaultTariffs");
 
 const router = express.Router();
 
@@ -10,7 +10,15 @@ router.get("/", auth, userOnly, async (req, res) => {
     where: {
       OR: [
         { userId: req.user.id },
-        { userId: null, NOT: { operator: "YAS", operationType: "RETRAIT" } },
+        {
+          userId: null,
+          NOT: {
+            OR: [
+              { operator: "YAS", operationType: "RETRAIT" },
+              { operator: "YAS", operationType: "TRANSFERT" },
+            ],
+          },
+        },
       ],
     },
     orderBy: [{ operator: "asc" }, { operationType: "asc" }],
@@ -21,17 +29,17 @@ router.get("/", auth, userOnly, async (req, res) => {
 router.post("/upsert", auth, userOnly, async (req, res) => {
   try {
     const { id, operator, operationType, minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
-    const mvolaWithdrawalFee = isMvolaWithdrawalTariff(operator, operationType)
-      ? findMvolaWithdrawalOperatorFee(minAmount, maxAmount)
+    const mvolaGuidedFee = isMvolaGuidedTariff(operator, operationType)
+      ? findMvolaGuidedOperatorFee(operationType, minAmount, maxAmount)
       : null;
-    if (isMvolaWithdrawalTariff(operator, operationType) && !mvolaWithdrawalFee) {
-      return res.status(400).json({ message: "Tranche retrait Mvola invalide. Utilisez une tranche du tableau officiel." });
+    if (isMvolaGuidedTariff(operator, operationType) && !mvolaGuidedFee) {
+      return res.status(400).json({ message: "Tranche Mvola invalide. Utilisez une tranche du tableau officiel." });
     }
-    const feeOperator = mvolaWithdrawalFee ? mvolaWithdrawalFee.operatorFee : Number(operatorFee || 0);
+    const feeOperator = mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee || 0);
     const feePersonal = Number(personalFee || 0);
     const gain = Number(gainCumule || 0);
-    const cleanMinAmount = mvolaWithdrawalFee ? mvolaWithdrawalFee.minAmount : Number(minAmount);
-    const cleanMaxAmount = mvolaWithdrawalFee ? mvolaWithdrawalFee.maxAmount : Number(maxAmount);
+    const cleanMinAmount = mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount);
+    const cleanMaxAmount = mvolaGuidedFee ? mvolaGuidedFee.maxAmount : Number(maxAmount);
     const tariff = await prisma.tariff.upsert({
       where: {
         userId_operator_operationType_minAmount_maxAmount: {
@@ -70,16 +78,16 @@ router.patch("/:id", auth, userOnly, async (req, res) => {
     const { minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
     const existing = await prisma.tariff.findFirst({ where: { id: req.params.id, userId: req.user.id } });
     if (!existing) return res.status(404).json({ message: "Tarif introuvable" });
-    const mvolaWithdrawalFee = isMvolaWithdrawalTariff(existing.operator, existing.operationType)
-      ? findMvolaWithdrawalOperatorFee(existing.minAmount, existing.maxAmount)
+    const mvolaGuidedFee = isMvolaGuidedTariff(existing.operator, existing.operationType)
+      ? findMvolaGuidedOperatorFee(existing.operationType, existing.minAmount, existing.maxAmount)
       : null;
 
     const updated = await prisma.tariff.update({
       where: { id: req.params.id },
       data: {
-        minAmount: mvolaWithdrawalFee ? mvolaWithdrawalFee.minAmount : Number(minAmount ?? existing.minAmount),
-        maxAmount: mvolaWithdrawalFee ? mvolaWithdrawalFee.maxAmount : Number(maxAmount ?? existing.maxAmount),
-        operatorFee: mvolaWithdrawalFee ? mvolaWithdrawalFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0),
+        minAmount: mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount ?? existing.minAmount),
+        maxAmount: mvolaGuidedFee ? mvolaGuidedFee.maxAmount : Number(maxAmount ?? existing.maxAmount),
+        operatorFee: mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0),
         personalFee: Number(personalFee ?? existing.personalFee ?? 0),
         gainCumule: Number(gainCumule ?? existing.gainCumule ?? 0),
       },

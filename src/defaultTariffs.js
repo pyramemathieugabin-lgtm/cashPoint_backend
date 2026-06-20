@@ -61,21 +61,66 @@ const MVOLA_TRANSFER_OPERATOR_FEES = [
   { minAmount: 19000001, maxAmount: 20000000, operatorFee: 31300 },
 ];
 
-const getMvolaGuidedOperatorFees = (operationType) => {
-  if (operationType === "RETRAIT") return MVOLA_WITHDRAWAL_OPERATOR_FEES;
-  if (operationType === "TRANSFERT") return MVOLA_TRANSFER_OPERATOR_FEES;
+const ORANGE_WITHDRAWAL_OPERATOR_FEES = [
+  { minAmount: 200, maxAmount: 1000, operatorFee: 150 },
+  { minAmount: 1001, maxAmount: 5000, operatorFee: 175 },
+  { minAmount: 5001, maxAmount: 10000, operatorFee: 350 },
+  { minAmount: 10001, maxAmount: 25000, operatorFee: 700 },
+  { minAmount: 25001, maxAmount: 50000, operatorFee: 1500 },
+  { minAmount: 50001, maxAmount: 100000, operatorFee: 2000 },
+  { minAmount: 100001, maxAmount: 250000, operatorFee: 3500 },
+  { minAmount: 250001, maxAmount: 500000, operatorFee: 4800 },
+  { minAmount: 500001, maxAmount: 1000000, operatorFee: 9000 },
+  { minAmount: 1000001, maxAmount: 2000000, operatorFee: 15000 },
+  { minAmount: 2000001, maxAmount: 3000000, operatorFee: 20000 },
+  { minAmount: 3000001, maxAmount: 4000000, operatorFee: 25000 },
+  { minAmount: 4000001, maxAmount: 5000000, operatorFee: 30000 },
+  { minAmount: 5000001, maxAmount: 6000000, operatorFee: 35000 },
+  { minAmount: 6000001, maxAmount: 7000000, operatorFee: 40000 },
+  { minAmount: 7000001, maxAmount: 8000000, operatorFee: 45000 },
+  { minAmount: 8000001, maxAmount: 9000000, operatorFee: 50000 },
+  { minAmount: 9000001, maxAmount: 10000000, operatorFee: 55000 },
+];
+
+const ORANGE_TRANSFER_OPERATOR_FEES = [
+  { minAmount: 200, maxAmount: 1000, operatorFee: 50 },
+  { minAmount: 1001, maxAmount: 5000, operatorFee: 50 },
+  { minAmount: 5001, maxAmount: 10000, operatorFee: 100 },
+  { minAmount: 10001, maxAmount: 25000, operatorFee: 200 },
+  { minAmount: 25001, maxAmount: 50000, operatorFee: 400 },
+  { minAmount: 50001, maxAmount: 100000, operatorFee: 800 },
+  { minAmount: 100001, maxAmount: 250000, operatorFee: 1500 },
+  { minAmount: 250001, maxAmount: 500000, operatorFee: 1500 },
+  { minAmount: 500001, maxAmount: 1000000, operatorFee: 2500 },
+  { minAmount: 1000001, maxAmount: 2000000, operatorFee: 3000 },
+  { minAmount: 2000001, maxAmount: 3000000, operatorFee: 3000 },
+  { minAmount: 3000001, maxAmount: 4000000, operatorFee: 3000 },
+  { minAmount: 4000001, maxAmount: 5000000, operatorFee: 3000 },
+  { minAmount: 5000001, maxAmount: 6000000, operatorFee: 3000 },
+  { minAmount: 6000001, maxAmount: 7000000, operatorFee: 3000 },
+  { minAmount: 7000001, maxAmount: 8000000, operatorFee: 3000 },
+  { minAmount: 8000001, maxAmount: 9000000, operatorFee: 3000 },
+  { minAmount: 9000001, maxAmount: 10000000, operatorFee: 3000 },
+];
+const getGuidedOperatorFees = (operator, operationType) => {
+  if (operator === "YAS" && operationType === "RETRAIT") return MVOLA_WITHDRAWAL_OPERATOR_FEES;
+  if (operator === "YAS" && operationType === "TRANSFERT") return MVOLA_TRANSFER_OPERATOR_FEES;
+  if (operator === "ORANGE" && operationType === "RETRAIT") return ORANGE_WITHDRAWAL_OPERATOR_FEES;
+  if (operator === "ORANGE" && operationType === "TRANSFERT") return ORANGE_TRANSFER_OPERATOR_FEES;
   return null;
 };
 
-const isMvolaGuidedTariff = (operator, operationType) => operator === "YAS" && Boolean(getMvolaGuidedOperatorFees(operationType));
+const isGuidedTariff = (operator, operationType) => Boolean(getGuidedOperatorFees(operator, operationType));
 
-const findMvolaGuidedOperatorFee = (operationType, minAmount, maxAmount) =>
-  (getMvolaGuidedOperatorFees(operationType) || []).find((fee) => fee.minAmount === Number(minAmount) && fee.maxAmount === Number(maxAmount)) || null;
+const findGuidedOperatorFee = (operator, operationType, minAmount, maxAmount) =>
+  (getGuidedOperatorFees(operator, operationType) || []).find((fee) => fee.minAmount === Number(minAmount) && fee.maxAmount === Number(maxAmount)) || null;
 
 module.exports = {
   MVOLA_WITHDRAWAL_OPERATOR_FEES,
   MVOLA_TRANSFER_OPERATOR_FEES,
-  getMvolaGuidedOperatorFees,
-  isMvolaGuidedTariff,
-  findMvolaGuidedOperatorFee,
+  ORANGE_WITHDRAWAL_OPERATOR_FEES,
+  ORANGE_TRANSFER_OPERATOR_FEES,
+  getGuidedOperatorFees,
+  isGuidedTariff,
+  findGuidedOperatorFee,
 };

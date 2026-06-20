@@ -1,5 +1,5 @@
 const { prisma } = require("../config/db");
-const { isMvolaGuidedTariff } = require("../defaultTariffs");
+const { isGuidedTariff } = require("../defaultTariffs");
 
 const OPERATION_TYPES = ["DEPOT", "RETRAIT", "TRANSFERT", "CREDIT"];
 const OPERATORS = ["YAS", "AIRTEL", "ORANGE"];
@@ -36,7 +36,7 @@ const findTariff = async ({ userId, operator, operationType, amount }) => {
     orderBy: { minAmount: "asc" },
   });
   if (own) return own;
-  if (isMvolaGuidedTariff(operator, operationType)) return null;
+  if (isGuidedTariff(operator, operationType)) return null;
   return prisma.tariff.findFirst({
     where: {
       userId: null,

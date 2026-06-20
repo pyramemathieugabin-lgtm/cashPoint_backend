@@ -1,7 +1,7 @@
 const express = require("express");
 const { prisma } = require("../config/db");
 const { auth, userOnly } = require("../middleware/auth");
-const { findMvolaGuidedOperatorFee, isMvolaGuidedTariff } = require("../defaultTariffs");
+const { findGuidedOperatorFee, isGuidedTariff } = require("../defaultTariffs");
 
 const router = express.Router();
 const isFreeOperatorFeeOperation = (operationType) => ["DEPOT", "CREDIT"].includes(operationType);
@@ -17,6 +17,8 @@ router.get("/", auth, userOnly, async (req, res) => {
             OR: [
               { operator: "YAS", operationType: "RETRAIT" },
               { operator: "YAS", operationType: "TRANSFERT" },
+              { operator: "ORANGE", operationType: "RETRAIT" },
+              { operator: "ORANGE", operationType: "TRANSFERT" },
             ],
           },
         },
@@ -30,17 +32,17 @@ router.get("/", auth, userOnly, async (req, res) => {
 router.post("/upsert", auth, userOnly, async (req, res) => {
   try {
     const { id, operator, operationType, minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
-    const mvolaGuidedFee = isMvolaGuidedTariff(operator, operationType)
-      ? findMvolaGuidedOperatorFee(operationType, minAmount, maxAmount)
+    const guidedFee = isGuidedTariff(operator, operationType)
+      ? findGuidedOperatorFee(operator, operationType, minAmount, maxAmount)
       : null;
-    if (isMvolaGuidedTariff(operator, operationType) && !mvolaGuidedFee) {
-      return res.status(400).json({ message: "Tranche Mvola invalide. Utilisez une tranche du tableau officiel." });
+    if (isGuidedTariff(operator, operationType) && !guidedFee) {
+      return res.status(400).json({ message: "Tranche invalide. Utilisez une tranche du tableau officiel." });
     }
-    const feeOperator = isFreeOperatorFeeOperation(operationType) ? 0 : (mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee || 0));
+    const feeOperator = isFreeOperatorFeeOperation(operationType) ? 0 : (guidedFee ? guidedFee.operatorFee : Number(operatorFee || 0));
     const feePersonal = Number(personalFee || 0);
     const gain = Number(gainCumule || 0);
-    const cleanMinAmount = mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount);
-    const cleanMaxAmount = mvolaGuidedFee ? mvolaGuidedFee.maxAmount : Number(maxAmount);
+    const cleanMinAmount = guidedFee ? guidedFee.minAmount : Number(minAmount);
+    const cleanMaxAmount = guidedFee ? guidedFee.maxAmount : Number(maxAmount);
     const tariff = await prisma.tariff.upsert({
       where: {
         userId_operator_operationType_minAmount_maxAmount: {
@@ -79,16 +81,16 @@ router.patch("/:id", auth, userOnly, async (req, res) => {
     const { minAmount, maxAmount, operatorFee, personalFee, gainCumule } = req.body;
     const existing = await prisma.tariff.findFirst({ where: { id: req.params.id, userId: req.user.id } });
     if (!existing) return res.status(404).json({ message: "Tarif introuvable" });
-    const mvolaGuidedFee = isMvolaGuidedTariff(existing.operator, existing.operationType)
-      ? findMvolaGuidedOperatorFee(existing.operationType, existing.minAmount, existing.maxAmount)
+    const guidedFee = isGuidedTariff(existing.operator, existing.operationType)
+      ? findGuidedOperatorFee(existing.operator, existing.operationType, existing.minAmount, existing.maxAmount)
       : null;
 
     const updated = await prisma.tariff.update({
       where: { id: req.params.id },
       data: {
-        minAmount: mvolaGuidedFee ? mvolaGuidedFee.minAmount : Number(minAmount ?? existing.minAmount),
-        maxAmount: mvolaGuidedFee ? mvolaGuidedFee.maxAmount : Number(maxAmount ?? existing.maxAmount),
-        operatorFee: isFreeOperatorFeeOperation(existing.operationType) ? 0 : (mvolaGuidedFee ? mvolaGuidedFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0)),
+        minAmount: guidedFee ? guidedFee.minAmount : Number(minAmount ?? existing.minAmount),
+        maxAmount: guidedFee ? guidedFee.maxAmount : Number(maxAmount ?? existing.maxAmount),
+        operatorFee: isFreeOperatorFeeOperation(existing.operationType) ? 0 : (guidedFee ? guidedFee.operatorFee : Number(operatorFee ?? existing.operatorFee ?? 0)),
         personalFee: Number(personalFee ?? existing.personalFee ?? 0),
         gainCumule: Number(gainCumule ?? existing.gainCumule ?? 0),
       },

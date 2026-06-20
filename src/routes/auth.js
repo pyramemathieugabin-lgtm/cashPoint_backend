@@ -4,13 +4,17 @@ const crypto = require("crypto");
 const { prisma } = require("../config/db");
 const { auth, adminOnly } = require("../middleware/auth");
 const { ensureCashBox } = require("../services/cashService");
+const { normalizePhone, validateUserPhone } = require("../utils/phone");
 
 const router = express.Router();
 
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
-const normalizePhone = (phone) => String(phone || "").trim();
-const normalizeIdentifier = (value) => String(value || "").trim().toLowerCase();
+const normalizeIdentifier = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw.includes("@")) return normalizePhone(raw);
+  return raw;
+};
 
 const signToken = (account, accountType) =>
   jwt.sign(
@@ -79,7 +83,7 @@ router.post("/signup", async (req, res) => {
     if (password !== confirmPassword) return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
 
     const lowerEmail = normalizeEmail(email);
-    const cleanPhone = normalizePhone(phone);
+    const cleanPhone = validateUserPhone(phone);
     if (lowerEmail) {
       const existingUser = await prisma.user.findUnique({ where: { email: lowerEmail } });
       if (existingUser) return res.status(409).json({ message: "Email deja utilise" });
@@ -212,8 +216,7 @@ router.patch("/admin/users/:id", auth, adminOnly, async (req, res) => {
       data.email = lowerEmail || null;
     }
     if (req.body.phone !== undefined) {
-      const cleanPhone = normalizePhone(req.body.phone);
-      if (!cleanPhone) return res.status(400).json({ message: "Numero telephone obligatoire." });
+      const cleanPhone = validateUserPhone(req.body.phone);
       data.phone = cleanPhone;
     }
     if (req.body.password || req.body.confirmPassword) {

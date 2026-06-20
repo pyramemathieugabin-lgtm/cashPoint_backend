@@ -2,6 +2,7 @@ const express = require("express");
 const { prisma } = require("../config/db");
 const { auth, userOnly } = require("../middleware/auth");
 const { createOperationAndUpdateCash, calculateOperationValues } = require("../services/cashService");
+const { validateOperatorPhone } = require("../utils/phone");
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post("/", auth, userOnly, async (req, res) => {
       operator: req.body.operator,
       externalId: req.body.externalId,
       reference: req.body.reference,
-      customerPhone: req.body.customerPhone,
+      customerPhone: validateOperatorPhone(req.body.customerPhone, req.body.operator),
       customerName: req.body.customerName,
       includeWithdrawalFeeForTransfer: Boolean(req.body.includeWithdrawalFeeForTransfer),
       createdAt: req.body.offlineCreatedAt,
